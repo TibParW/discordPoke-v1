@@ -1,26 +1,44 @@
-require('dotenv').config(); // ใช้ dotenv เพื่อโหลด .env ที่เก็บข้อมูลลับ
+require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 
-// สร้าง Client ที่จะเชื่อมต่อกับ Discord API
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
+    GatewayIntentBits.MessageContent,
+  ],
 });
 
-// เมื่อบอทเชื่อมต่อกับ Discord สำเร็จ
 client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
-// ตรวจจับข้อความที่ถูกส่งเข้ามา
-client.on('messageCreate', message => {
-  if (message.content === '!ping') {
-    message.reply('🏓 Pong!');
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (!message.content.startsWith('!pokemove')) return;
+
+  const member = message.mentions.members.first();
+  if (!member) return message.reply('กรุณา mention ผู้ใช้ เช่น `!pokemove @user`');
+
+  const voiceChannel = member.voice.channel;
+  if (!voiceChannel) return message.reply('ผู้ใช้นี้ไม่ได้อยู่ใน Voice Channel');
+
+  const afkChannel = message.guild.afkChannel;
+  if (!afkChannel) return message.reply('ไม่พบ AFK channel ในเซิร์ฟเวอร์นี้');
+
+  try {
+    // ย้ายไป AFK
+    await member.voice.setChannel(afkChannel);
+    // รอ 2 วินาที
+    setTimeout(async () => {
+      await member.voice.setChannel(voiceChannel);
+      message.reply(`✅ poke แล้วโยกย้าย ${member.user.username} เสร็จเรียบร้อย!`);
+    }, 2000);
+  } catch (err) {
+    console.error(err);
+    message.reply('❌ ไม่สามารถย้ายผู้ใช้นี้ได้ อาจไม่มีสิทธิ์หรือเกิดข้อผิดพลาด');
   }
 });
 
-// ใช้ Token เพื่อให้บอทล็อกอินเข้าสู่ Discord
 client.login(process.env.DISCORD_TOKEN);
