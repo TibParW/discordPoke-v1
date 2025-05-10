@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
+const { Client, GatewayIntentBits } = require('discord.js');
 
 const client = new Client({
   intents: [
@@ -17,6 +17,7 @@ client.once('ready', () => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
+  // คำสั่ง !poke @user [ข้อความ]
   if (message.content.startsWith('!poke')) {
     const args = message.content.split(' ');
     const member = message.mentions.members.first();
@@ -29,49 +30,49 @@ client.on('messageCreate', async (message) => {
     if (!voiceChannel) return message.reply('ผู้ใช้นี้ไม่ได้อยู่ใน Voice Channel');
     if (!afkChannel) return message.reply('ไม่พบ AFK channel ในเซิร์ฟเวอร์นี้');
 
-    const botMember = message.guild.members.me;
-    if (!voiceChannel.permissionsFor(botMember).has(PermissionsBitField.Flags.MoveMembers)) {
-      return message.reply('❌ บอทไม่มีสิทธิ์ Move Members ในช่องเสียงนี้');
-    }
-
-    if (member.roles.highest.position >= botMember.roles.highest.position) {
-      return message.reply('❌ บอทไม่สามารถย้ายผู้ใช้ที่มี Role สูงกว่าหรือเท่ากันได้');
-    }
-
     try {
-      await member.send(`${pokeMessage}\n🔔 โป๊ก! คุณกำลังโดนก่อกวน จงออกแล้วเข้าห้องใหม่เพื่อหยุด`);
-      await member.send({ files: ['https://media.giphy.com/media/l41Yq4Tnlg1B0uMnO/giphy.gif'] });
+      await member.send(pokeMessage);
+      await message.channel.send(`${member}, ${pokeMessage}`);
 
-      let originalChannel = voiceChannel;
+      let active = true;
 
-      const loopInterval = setInterval(async () => {
-        const currentVoice = member.voice.channel;
+      // เริ่มการโยกย้ายวนลูป
+      const loopPoke = async () => {
+        while (active) {
+          if (!member.voice.channel) {
+            message.channel.send(`❌ ${member.user.username} ออกจาก Voice Channel แล้ว หยุด poke`);
+            break;
+          }
 
-        // ถ้าไม่ได้อยู่ใน voice หรือออกเอง ให้หยุด loop
-        if (!currentVoice || currentVoice.id !== originalChannel.id) {
-          clearInterval(loopInterval);
-          await member.send('✅ หยุด poke แล้ว! คุณออกจากห้องเดิมหรือเปลี่ยนห้องเองแล้ว');
-          return;
-        }
+          try {
+            await member.voice.setChannel(afkChannel);
+            await member.send('🔔 Poke Alert! 🔔');
+            await message.channel.send({
+              content: `${member} โดน poke!`,
+              files: ['https://media.giphy.com/media/l41Yq4Tnlg1B0uMnO/giphy.gif'],
+            });
 
-        try {
-          await member.voice.setChannel(afkChannel);
-          setTimeout(async () => {
-            // ตรวจสอบอีกครั้งก่อนจะย้ายกลับ
+            await new Promise((res) => setTimeout(res, 2000));
+
             if (member.voice.channel && member.voice.channel.id === afkChannel.id) {
-              await member.voice.setChannel(originalChannel);
+              await member.voice.setChannel(voiceChannel);
+              await member.send(`✅ ย้ายกลับไปห้องเดิมแล้ว`);
             }
-          }, 1000); // กลับมาห้องเดิมใน 1 วิ
-        } catch (err) {
-          console.error('Error while toggling voice:', err);
-          clearInterval(loopInterval);
-          await member.send('❌ เกิดข้อผิดพลาดระหว่าง poke');
+
+            await new Promise((res) => setTimeout(res, 2000));
+          } catch (err) {
+            console.error('❌ เกิดข้อผิดพลาดระหว่างโยกย้าย:', err);
+            message.channel.send(`❌ ไม่สามารถย้ายผู้ใช้นี้ได้: ${err.message}`);
+            break;
+          }
         }
-      }, 2500); // ทุก 2.5 วิ สลับอีกครั้ง
+      };
+
+      loopPoke();
 
     } catch (err) {
-      console.error(err);
-      message.reply('❌ ไม่สามารถย้ายผู้ใช้นี้ได้ อาจไม่มีสิทธิ์หรือเกิดข้อผิดพลาด');
+      console.error('❌ ERROR in Poke process:', err);
+      message.reply('❌ ไม่สามารถดำเนินการ poke ได้: ' + err.message);
     }
   }
 });
