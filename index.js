@@ -16,28 +16,50 @@ client.once('ready', () => {
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
-  if (!message.content.startsWith('!pokemove')) return;
 
-  const member = message.mentions.members.first();
-  if (!member) return message.reply('กรุณา mention ผู้ใช้ เช่น `!pokemove @user`');
+  // คำสั่ง !poke @user [ข้อความ]
+  if (message.content.startsWith('!poke')) {
+    const args = message.content.split(' ');
+    const member = message.mentions.members.first();
+    if (!member) return message.reply('กรุณา mention ผู้ใช้ เช่น `!poke @user [ข้อความ]`');
+    
+    const pokeMessage = args.slice(2).join(' ') || 'โป๊ก!!!'; // ข้อความที่ส่งไป
 
-  const voiceChannel = member.voice.channel;
-  if (!voiceChannel) return message.reply('ผู้ใช้นี้ไม่ได้อยู่ใน Voice Channel');
+    const voiceChannel = member.voice.channel;
+    if (!voiceChannel) return message.reply('ผู้ใช้นี้ไม่ได้อยู่ใน Voice Channel');
+    
+    const afkChannel = message.guild.afkChannel;
+    if (!afkChannel) return message.reply('ไม่พบ AFK channel ในเซิร์ฟเวอร์นี้');
 
-  const afkChannel = message.guild.afkChannel;
-  if (!afkChannel) return message.reply('ไม่พบ AFK channel ในเซิร์ฟเวอร์นี้');
+    try {
+      // ส่งข้อความไปยัง DM
+      await member.send(`${pokeMessage}`);
+      
+      // ส่งข้อความในช่องแชท
+      message.channel.send(`${member}, ${pokeMessage}`);
 
-  try {
-    // ย้ายไป AFK
-    await member.voice.setChannel(afkChannel);
-    // รอ 2 วินาที
-    setTimeout(async () => {
-      await member.voice.setChannel(voiceChannel);
-      message.reply(`✅ poke แล้วโยกย้าย ${member.user.username} เสร็จเรียบร้อย!`);
-    }, 2000);
-  } catch (err) {
-    console.error(err);
-    message.reply('❌ ไม่สามารถย้ายผู้ใช้นี้ได้ อาจไม่มีสิทธิ์หรือเกิดข้อผิดพลาด');
+      // สลับช่องผู้ใช้ไป AFK
+      await member.voice.setChannel(afkChannel);
+
+      // ส่งเสียงเตือน (Ping)
+      member.send('🔔 Poke Alert! 🔔');
+      
+      // ถ้ามี GIF เพิ่มเติม
+      message.channel.send({ 
+        content: `${member} โดน poke!`, 
+        files: ['https://media.giphy.com/media/l41Yq4Tnlg1B0uMnO/giphy.gif'] // ใส่ GIF ที่ต้องการ
+      });
+
+      // รอ 2 วินาทีแล้วกลับไปช่องเดิม
+      setTimeout(async () => {
+        await member.voice.setChannel(voiceChannel);
+        message.reply(`✅ Poke เสร็จเรียบร้อย! ${member.user.username} กลับไปที่ช่องเดิม`);
+      }, 2000);
+
+    } catch (err) {
+      console.error(err);
+      message.reply('❌ ไม่สามารถย้ายผู้ใช้นี้ได้ อาจไม่มีสิทธิ์หรือเกิดข้อผิดพลาด');
+    }
   }
 });
 
